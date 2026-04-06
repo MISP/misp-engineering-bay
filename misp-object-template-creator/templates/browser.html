@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Browse Templates — MISP Object Template Creator{% endblock %}
+{% block content %}
+<div class="browser-page">
+    <div class="page-header">
+        <h1>Browse Object Templates</h1>
+        <p class="subtitle">Explore existing MISP object templates. Clone any template to use as a starting point.</p>
+    </div>
+
+    <div class="browser-controls">
+        <input type="text" id="search-input" class="form-input search-input" placeholder="Search by name or description...">
+        <select id="category-filter" class="form-select">
+            <option value="">All categories</option>
+        </select>
+        <span id="result-count" class="result-count"></span>
+    </div>
+
+    <div id="templates-grid" class="templates-grid">
+        <div class="loading">Loading templates...</div>
+    </div>
+</div>
+
+<!-- JSON Preview Modal -->
+<div id="json-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modal-title">Template JSON</h2>
+            <button class="btn btn-icon modal-close" title="Close">&times;</button>
+        </div>
+        <pre id="modal-json" class="json-preview"></pre>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="copyModalJson()">Copy JSON</button>
+            <button class="btn btn-primary" onclick="cloneFromModal()">Clone to Editor</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/types.js') }}"></script>
+<script>
+let allTemplates = [];
+let currentModalTemplate = null;
+
+async function loadTemplates() {
+    const res = await fetch('/api/templates');
+    allTemplates = await res.json();
+    renderTemplates(allTemplates);
+    populateCategoryFilter();
+}
+
+function populateCategoryFilter() {
+    const cats = [...new Set(allTemplates.map(t => t['meta-category']).filter(Boolean))].sort();
+    const select = document.getElementById('category-filter');
+    cats.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.textContent = cat;
+        select.appendChild(opt);
+    });
+}
+
+function filterTemplates() {
+    const query = document.getElementById('search-input').value.toLowerCase();
+    const cat = document.getElementById('category-filter').value;
+    let filtered = allTemplates;
+    if (query) {
+        filtered = filtered.filter(t =>
+            t.name.includes(query) || (t.description && t.description.toLowerCase().includes(query))
+        );
+    }
+    if (cat) {
+        filtered = filtered.filter(t => t['meta-category'] === cat);
+    }
+    renderTemplates(filtered);
+}
+
+function renderTemplates(templates) {
+    const grid = document.getElementById('templates-grid');
+    document.getElementById('result-count').textContent = `${templates.length} template${templates.length !== 1 ? 's' : ''}`;
+
+    if (templates.length === 0) {
+        grid.innerHTML = '<div class="empty-state">No templates match your search.</div>';
+        return;
+    }
+
+    grid.innerHTML = templates.map(t => `
+        <div class="template-card">
+            <div class="template-card-header">
+                <h3 class="template-name">${escapeHtml(t.name)}</h3>
+                <span class="badge badge-${t.source === 'user' ? 'user' : 'submodule'}">${t.source}</span>
+            </div>
+            <p class="template-desc">${escapeHtml(t.description || 'No description')}</p>
+            <div class="template-meta">
+                <span class="meta-badge">${escapeHtml(t['meta-category'])}</span>
+                <span class="meta-info">${t.attribute_count} attributes</span>
+                <span class="meta-info">v${t.version}</span>
+            </div>
+            <div class="template-actions">
+                <button class="btn btn-small btn-secondary" onclick="viewJson('${escapeHtml(t.name)}')">View JSON</button>
+                <button class="btn btn-small btn-primary" onclick="cloneTemplate('${escapeHtml(t.name)}')">Clone to Editor</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function viewJson(name) {
+    const res = await fetch(`/api/templates/${encodeURIComponent(name)}`);
+    const data = await res.json();
+    currentModalTemplate = data;
+    const clean = Object.fromEntries(Object.entries(data).filter(([k]) => !k.startsWith('_')));
+    document.getElementById('modal-title').textContent = name;
+    document.getElementById('modal-json').textContent = JSON.stringify(clean, null, 2);
+    document.getElementById('json-modal').hidden = false;
+}
+
+function copyModalJson() {
+    const text = document.getElementById('modal-json').textContent;
+    navigator.clipboard.writeText(text);
+    showToast('JSON copied to clipboard');
+}
+
+function cloneTemplate(name) {
+    window.location.href = `/?clone=${encodeURIComponent(name)}`;
+}
+
+function cloneFromModal() {
+    if (currentModalTemplate) {
+        cloneTemplate(currentModalTemplate.name);
+    }
+}
+
+document.getElementById('json-modal').querySelector('.modal-close').addEventListener('click', () => {
+    document.getElementById('json-modal').hidden = true;
+});
+document.getElementById('json-modal').querySelector('.modal-backdrop').addEventListener('click', () => {
+    document.getElementById('json-modal').hidden = true;
+});
+
+document.getElementById('search-input').addEventListener('input', filterTemplates);
+document.getElementById('category-filter').addEventListener('change', filterTemplates);
+
+loadTemplates();
+</script>
+{% endblock %}

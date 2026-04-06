@@ -1,0 +1,59 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        working-directory: misp-object-template-creator
+        run: |
+          python -m venv venv
+          ./venv/bin/pip install --upgrade pip
+          ./venv/bin/pip install -r requirements.txt
+
+      - name: Run tests
+        working-directory: misp-object-template-creator
+        run: ./venv/bin/python -m pytest tests/ -v --tb=short
+
+      - name: Validate all existing templates
+        working-directory: misp-object-template-creator
+        run: |
+          ./venv/bin/python -c "
+          import sys, json, glob
+          sys.path.insert(0, '.')
+          from describe_types import get_describe_types
+          from validator import validate_template
+          dt = get_describe_types()
+          failures = 0
+          for path in sorted(glob.glob('../misp-objects/objects/*/definition.json')):
+              with open(path) as f:
+                  tpl = json.load(f)
+              result = validate_template(tpl, dt)
+              if not result.valid:
+                  print(f'FAIL: {tpl.get(\"name\", path)} — {result.errors[:3]}')
+                  failures += 1
+          total = len(glob.glob('../misp-objects/objects/*/definition.json'))
+          print(f'{total - failures}/{total} templates valid')
+          if failures:
+              sys.exit(1)
+          "

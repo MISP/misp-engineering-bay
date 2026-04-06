@@ -1,0 +1,528 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "MISP Object Template Creator API",
+    "description": "REST API for creating, validating, and managing MISP object template definitions.",
+    "version": "1.0.0",
+    "license": {
+      "name": "BSD-2-Clause"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Local development server"
+    }
+  ],
+  "tags": [
+    { "name": "Types", "description": "MISP type and category lookups" },
+    { "name": "Templates", "description": "Object template CRUD" },
+    { "name": "Validation", "description": "Template validation" },
+    { "name": "Utility", "description": "Utility endpoints" }
+  ],
+  "paths": {
+    "/api/describe-types": {
+      "get": {
+        "tags": ["Types"],
+        "summary": "Get full describeTypes data",
+        "description": "Returns the complete MISP type system: all attribute types, categories, category-type mappings, and sane defaults.",
+        "operationId": "getDescribeTypes",
+        "responses": {
+          "200": {
+            "description": "Full describeTypes payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "types": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "All valid MISP attribute types"
+                    },
+                    "categories": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "All valid MISP categories"
+                    },
+                    "category_type_mappings": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": { "type": "string" }
+                      },
+                      "description": "Map of category -> list of valid types"
+                    },
+                    "sane_defaults": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "default_category": { "type": "string" },
+                          "to_ids": { "type": "integer" }
+                        }
+                      },
+                      "description": "Default category and to_ids flag per type"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/meta-categories": {
+      "get": {
+        "tags": ["Types"],
+        "summary": "List valid meta-categories",
+        "operationId": "getMetaCategories",
+        "responses": {
+          "200": {
+            "description": "Array of valid meta-category strings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "example": ["file", "network", "misc"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/types": {
+      "get": {
+        "tags": ["Types"],
+        "summary": "List all MISP attribute types with metadata",
+        "operationId": "getTypes",
+        "responses": {
+          "200": {
+            "description": "Array of type summaries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TypeSummary" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/types/{type}/categories": {
+      "get": {
+        "tags": ["Types"],
+        "summary": "Get valid categories for a specific MISP type",
+        "operationId": "getTypeCategories",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "ip-src"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Type info with valid categories",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TypeSummary" }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown type",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/templates": {
+      "get": {
+        "tags": ["Templates"],
+        "summary": "List all object templates",
+        "operationId": "listTemplates",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by name (substring match)"
+          },
+          {
+            "name": "meta-category",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by meta-category (exact match)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of template summaries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TemplateSummary" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Templates"],
+        "summary": "Create a new object template",
+        "operationId": "createTemplate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ObjectTemplate" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Template created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SaveResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "409": {
+            "description": "Template already exists",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ValidationResult" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/templates/{name}": {
+      "get": {
+        "tags": ["Templates"],
+        "summary": "Get a specific object template",
+        "operationId": "getTemplate",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "file"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full template definition",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ObjectTemplate" }
+              }
+            }
+          },
+          "404": {
+            "description": "Template not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Templates"],
+        "summary": "Update an existing template",
+        "operationId": "updateTemplate",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ObjectTemplate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Template updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SaveResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ValidationResult" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Templates"],
+        "summary": "Delete a user-created template",
+        "operationId": "deleteTemplate",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Template deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Cannot delete submodule template",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "404": {
+            "description": "Template not found in output directory",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/templates/validate": {
+      "post": {
+        "tags": ["Validation"],
+        "summary": "Validate a template without saving",
+        "operationId": "validateTemplate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ObjectTemplate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation result",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ValidationResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uuid": {
+      "get": {
+        "tags": ["Utility"],
+        "summary": "Generate a new UUIDv4",
+        "operationId": "generateUuid",
+        "responses": {
+          "200": {
+            "description": "A new UUID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uuid": { "type": "string", "format": "uuid" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "TypeSummary": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "example": "ip-src" },
+          "categories": {
+            "type": "array",
+            "items": { "type": "string" },
+            "example": ["Network activity", "External analysis"]
+          },
+          "default_category": { "type": "string", "example": "Network activity" },
+          "default_to_ids": { "type": "boolean", "example": true }
+        }
+      },
+      "TemplateSummary": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "meta-category": { "type": "string" },
+          "version": { "type": "integer" },
+          "attribute_count": { "type": "integer" },
+          "source": { "type": "string", "enum": ["misp-objects", "user"] }
+        }
+      },
+      "ObjectTemplate": {
+        "type": "object",
+        "required": ["name", "description", "meta-category", "uuid", "version", "attributes"],
+        "properties": {
+          "name": { "type": "string", "example": "my-object" },
+          "description": { "type": "string" },
+          "meta-category": { "type": "string", "enum": ["file", "network", "financial", "marine", "misc", "mobile", "internal", "vulnerability", "climate", "iot", "health", "followthemoney", "detection"] },
+          "uuid": { "type": "string", "format": "uuid" },
+          "version": { "type": "integer", "minimum": 1 },
+          "required": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Attribute names that are always mandatory"
+          },
+          "requiredOneOf": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "At least one of these attributes must be present"
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/components/schemas/AttributeDefinition" }
+          }
+        }
+      },
+      "AttributeDefinition": {
+        "type": "object",
+        "required": ["misp-attribute", "ui-priority", "description"],
+        "properties": {
+          "misp-attribute": { "type": "string", "description": "MISP attribute type from describeTypes" },
+          "ui-priority": { "type": "number" },
+          "description": { "type": "string" },
+          "disable_correlation": { "type": "boolean" },
+          "multiple": { "type": "boolean" },
+          "recommended": { "type": "boolean" },
+          "to_ids": { "type": "boolean" },
+          "categories": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "sane_default": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "values_list": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "ValidationResult": {
+        "type": "object",
+        "properties": {
+          "valid": { "type": "boolean" },
+          "errors": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ValidationMessage" }
+          },
+          "warnings": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ValidationMessage" }
+          }
+        }
+      },
+      "ValidationMessage": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "message": { "type": "string" },
+          "severity": { "type": "string", "enum": ["error", "warning"] }
+        }
+      },
+      "SaveResult": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" },
+          "path": { "type": "string" },
+          "valid": { "type": "boolean" },
+          "errors": { "type": "array", "items": { "$ref": "#/components/schemas/ValidationMessage" } },
+          "warnings": { "type": "array", "items": { "$ref": "#/components/schemas/ValidationMessage" } }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Editor — MISP Object Template Creator{% endblock %}
+{% block content %}
+<div class="editor-page">
+    <div class="editor-layout">
+        <!-- Left: Form -->
+        <div class="editor-form">
+            <div class="page-header">
+                <h1>Template Editor</h1>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" onclick="openLoadExisting()">Load Existing</button>
+                    <button class="btn btn-secondary" onclick="importJson()">Import JSON</button>
+                    <button class="btn btn-secondary" onclick="resetEditor()">New Template</button>
+                </div>
+            </div>
+
+            <!-- Section 1: Metadata -->
+            <section class="form-section">
+                <h2 class="section-title">Template Metadata</h2>
+
+                <div class="form-group">
+                    <label class="form-label" for="tpl-name">
+                        Name
+                        <span class="tooltip-trigger" data-tooltip="Unique identifier for this object template. Use lowercase letters, numbers, and hyphens only (e.g. 'my-object').">&#9432;</span>
+                    </label>
+                    <input type="text" id="tpl-name" class="form-input" placeholder="e.g. malware-config">
+                    <div class="field-error" id="err-name"></div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="tpl-description">
+                        Description
+                        <span class="tooltip-trigger" data-tooltip="A clear, concise explanation of what this object represents and when to use it.">&#9432;</span>
+                    </label>
+                    <textarea id="tpl-description" class="form-input form-textarea" placeholder="Describe the object's purpose..."></textarea>
+                    <div class="field-error" id="err-description"></div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label class="form-label" for="tpl-meta-category">
+                            Meta-category
+                            <span class="tooltip-trigger" data-tooltip="The broad category this object belongs to. Determines how it's grouped in the MISP UI.">&#9432;</span>
+                        </label>
+                        <select id="tpl-meta-category" class="form-select">
+                            <option value="">Select a category...</option>
+                        </select>
+                        <div class="field-error" id="err-meta-category"></div>
+                    </div>
+                    <div class="form-group flex-1">
+                        <label class="form-label" for="tpl-version">
+                            Version
+                            <span class="tooltip-trigger" data-tooltip="Increment when modifying an existing template. Start at 1 for new templates.">&#9432;</span>
+                        </label>
+                        <input type="number" id="tpl-version" class="form-input" value="1" min="1">
+                        <div class="field-error" id="err-version"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="tpl-uuid">
+                        UUID
+                        <span class="tooltip-trigger" data-tooltip="Unique identifier for this template. Auto-generated. Only regenerate if creating a completely new template.">&#9432;</span>
+                    </label>
+                    <div class="input-group">
+                        <input type="text" id="tpl-uuid" class="form-input" readonly>
+                        <button class="btn btn-small btn-secondary" onclick="regenerateUuid()">Regenerate</button>
+                    </div>
+                    <div class="field-error" id="err-uuid"></div>
+                </div>
+            </section>
+
+            <!-- Section 2: Attributes -->
+            <section class="form-section">
+                <div class="section-header">
+                    <h2 class="section-title">Attributes</h2>
+                    <button class="btn btn-primary" onclick="addAttribute()">+ Add Attribute</button>
+                </div>
+                <p class="section-hint">Define the attributes (fields) for this object template. Each attribute maps to a MISP attribute type.</p>
+                <div id="attributes-container"></div>
+                <div class="field-error" id="err-attributes"></div>
+            </section>
+
+            <!-- Section 3: Requirements -->
+            <section class="form-section">
+                <h2 class="section-title">Requirements</h2>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        Required attributes
+                        <span class="tooltip-trigger" data-tooltip="Attributes that must always be filled in when creating an object of this type.">&#9432;</span>
+                    </label>
+                    <div id="required-checkboxes" class="checkbox-grid">
+                        <span class="empty-hint">Add attributes above first</span>
+                    </div>
+                    <div class="field-error" id="err-required"></div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        Required one of
+                        <span class="tooltip-trigger" data-tooltip="At least one of these attributes must be filled in. Use when an object has multiple possible identifiers (e.g. filename OR hash).">&#9432;</span>
+                    </label>
+                    <div id="requiredOneOf-checkboxes" class="checkbox-grid">
+                        <span class="empty-hint">Add attributes above first</span>
+                    </div>
+                    <div class="field-error" id="err-requiredOneOf"></div>
+                </div>
+            </section>
+
+            <!-- Section 4: Actions -->
+            <section class="form-section actions-section">
+                <button class="btn btn-primary btn-large" onclick="saveTemplate()">Save Template</button>
+                <button class="btn btn-secondary btn-large" onclick="exportJson()">Export JSON</button>
+                <button class="btn btn-secondary btn-large" onclick="copyJson()">Copy to Clipboard</button>
+            </section>
+        </div>
+
+        <!-- Right: Preview -->
+        <div class="editor-preview">
+            <div class="preview-header">
+                <h2>Live Preview</h2>
+                <div id="validation-badge" class="validation-badge">
+                    <span class="badge badge-neutral">No data</span>
+                </div>
+            </div>
+            <div id="validation-errors" class="validation-errors" hidden></div>
+            <pre id="json-preview" class="json-preview">{ }</pre>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div id="import-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Import JSON</h2>
+            <button class="btn btn-icon modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">Upload a definition.json file</label>
+                <input type="file" id="import-file" accept=".json" class="form-input">
+            </div>
+            <div class="divider-text">or paste JSON below</div>
+            <div class="form-group">
+                <textarea id="import-textarea" class="form-input form-textarea" rows="12" placeholder='{"name": "...", "attributes": {...}, ...}'></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeImportModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="doImport()">Import</button>
+        </div>
+    </div>
+</div>
+
+<!-- Load Existing Modal -->
+<div id="load-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 800px; max-height: 85vh;">
+        <div class="modal-header">
+            <h2>Load Existing Template</h2>
+            <button class="btn btn-icon modal-close">&times;</button>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+            <div class="form-row" style="flex-shrink: 0;">
+                <input type="text" id="load-search" class="form-input flex-1" placeholder="Search templates by name or description...">
+                <select id="load-category-filter" class="form-select" style="width: auto; min-width: 160px;">
+                    <option value="">All categories</option>
+                </select>
+            </div>
+            <div class="load-mode-toggle" style="flex-shrink: 0; display: flex; gap: 12px; align-items: center; font-size: 13px;">
+                <label class="toggle-label">
+                    <input type="radio" name="load-mode" value="edit" checked> Load for editing (modify in place)
+                </label>
+                <label class="toggle-label">
+                    <input type="radio" name="load-mode" value="clone"> Clone as new template (new UUID)
+                </label>
+            </div>
+            <div id="load-templates-list" class="load-templates-list" style="overflow-y: auto; flex: 1;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Attribute card template (hidden) -->
+<template id="attribute-template">
+    <div class="attribute-card" data-attr-index="">
+        <div class="attribute-card-header">
+            <button class="btn btn-icon collapse-toggle" onclick="toggleAttributeCard(this)" title="Collapse/Expand">&#9660;</button>
+            <span class="attr-index-label">#1</span>
+            <span class="attr-name-preview"></span>
+            <div class="attribute-card-actions">
+                <button class="btn btn-icon" onclick="duplicateAttribute(this)" title="Duplicate">&#128203;</button>
+                <button class="btn btn-icon btn-move" onclick="moveAttribute(this, -1)" title="Move up">&#9650;</button>
+                <button class="btn btn-icon btn-move" onclick="moveAttribute(this, 1)" title="Move down">&#9660;</button>
+                <button class="btn btn-icon btn-danger" onclick="removeAttribute(this)" title="Remove">&times;</button>
+            </div>
+        </div>
+        <div class="attribute-card-body">
+            <div class="form-row">
+                <div class="form-group flex-1">
+                    <label class="form-label">
+                        Object relation
+                        <span class="tooltip-trigger" data-tooltip="The relationship name for this attribute within the object. This becomes the key in the attributes map. The object relation can differ from the MISP attribute type used to express it — e.g. an object relation 'distance' expressed as a 'float' type, or 'score' expressed as an 'integer'. Use lowercase with hyphens.">&#9432;</span>
+                    </label>
+                    <input type="text" class="form-input attr-name" placeholder="e.g. filename">
+                </div>
+                <div class="form-group flex-1">
+                    <label class="form-label">
+                        MISP type
+                        <span class="tooltip-trigger" data-tooltip="The MISP data type for this attribute. Determines validation rules and correlation behavior in MISP.">&#9432;</span>
+                    </label>
+                    <div class="searchable-select-wrapper">
+                        <input type="text" class="form-input attr-type-search" placeholder="Search types..." autocomplete="off">
+                        <select class="form-select attr-type" style="display:none"></select>
+                        <div class="type-dropdown" hidden></div>
+                    </div>
+                    <div class="type-info" hidden></div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">
+                    Description
+                    <span class="tooltip-trigger" data-tooltip="What this attribute represents. Shown to users in MISP when creating objects.">&#9432;</span>
+                </label>
+                <textarea class="form-input form-textarea attr-description" rows="2" placeholder="Describe this attribute..."></textarea>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">
+                        UI Priority
+                        <span class="tooltip-trigger" data-tooltip="Controls display order in MISP. Higher values = shown first. Use 0 for rarely-used attributes, 1 for standard, 100+ for primary fields.">&#9432;</span>
+                    </label>
+                    <input type="number" class="form-input attr-ui-priority" value="0" min="0">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">
+                    Categories
+                    <span class="tooltip-trigger" data-tooltip="Override the default categories for this attribute. Only categories valid for the selected MISP type are shown. Leave empty to use the type's default categories.">&#9432;</span>
+                </label>
+                <div class="categories-container"></div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Flags</label>
+                <div class="flags-row">
+                    <label class="toggle-label" title="Allow multiple values for this attribute in a single object instance.">
+                        <input type="checkbox" class="attr-multiple"> Multiple
+                        <span class="tooltip-trigger" data-tooltip="Allow multiple values for this attribute in a single object instance.">&#9432;</span>
+                    </label>
+                    <label class="toggle-label" title="When enabled, MISP will not correlate on this attribute.">
+                        <input type="checkbox" class="attr-disable-correlation"> Disable correlation
+                        <span class="tooltip-trigger" data-tooltip="When enabled, MISP will not create correlation links for this attribute. Use for high-volume, low-value fields like timestamps or free-text.">&#9432;</span>
+                    </label>
+                    <label class="toggle-label" title="When set to false, this attribute is de-emphasized in the MISP UI.">
+                        <input type="checkbox" class="attr-recommended" checked> Recommended
+                        <span class="tooltip-trigger" data-tooltip="When unchecked (set to false in JSON), this attribute is visually de-emphasized in the MISP UI. Leave checked for normal display. Only outputs to JSON when unchecked.">&#9432;</span>
+                    </label>
+                    <label class="toggle-label" title="Include in IDS exports.">
+                        <input type="checkbox" class="attr-to-ids"> To IDS
+                        <span class="tooltip-trigger" data-tooltip="If enabled, this attribute will be included in IDS exports (e.g. NIDS/HIDS rules). The default depends on the MISP type.">&#9432;</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group flex-1">
+                    <label class="form-label">
+                        Sane defaults
+                        <span class="tooltip-trigger" data-tooltip="Predefined values shown as a dropdown in MISP for convenience. Users can still enter custom values. Type a value and press Enter to add.">&#9432;</span>
+                    </label>
+                    <div class="tag-input-wrapper">
+                        <div class="tag-list attr-sane-defaults-tags"></div>
+                        <input type="text" class="form-input tag-input attr-sane-defaults-input" placeholder="Type and press Enter...">
+                    </div>
+                </div>
+                <div class="form-group flex-1">
+                    <label class="form-label">
+                        Values list
+                        <span class="tooltip-trigger" data-tooltip="Strict enumeration — users must choose from these values only. No custom input allowed in MISP. Type a value and press Enter to add.">&#9432;</span>
+                    </label>
+                    <div class="tag-input-wrapper">
+                        <div class="tag-list attr-values-list-tags"></div>
+                        <input type="text" class="form-input tag-input attr-values-list-input" placeholder="Type and press Enter...">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script src="{{ url_for('static', filename='js/types.js') }}"></script>
+<script src="{{ url_for('static', filename='js/editor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/preview.js') }}"></script>
+{% endblock %}
