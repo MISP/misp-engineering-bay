@@ -4,9 +4,25 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid as uuid_mod
 
 import config
+
+# Strict pattern for directory names written to disk — alphanumeric and hyphens only.
+# Prevents path traversal, special characters, leading/trailing hyphens, etc.
+SAFE_NAME_RE = re.compile(r"^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*$")
+
+
+def _validate_safe_name(name: str) -> None:
+    """Raise ValueError if a name is not safe for use as a directory name."""
+    if not name:
+        raise ValueError("Template name must not be empty")
+    if not SAFE_NAME_RE.match(name):
+        raise ValueError(
+            f"Template name '{name}' contains invalid characters. "
+            "Only alphanumeric characters and hyphens are allowed (no leading/trailing hyphens)."
+        )
 
 
 def _objects_dir() -> str:
@@ -88,12 +104,17 @@ def get_template(name: str) -> dict | None:
     return None
 
 
-def save_template(template: dict) -> str:
-    """Save a template to the output directory. Returns the file path."""
+def _write_template_to_dir(template: dict, directory: str) -> str:
+    """Write a clean definition.json into <directory>/<name>/. Returns file path."""
     name = template["name"]
-    # Strip internal metadata before saving
+    _validate_safe_name(name)
     clean = {k: v for k, v in template.items() if not k.startswith("_")}
-    out_dir = os.path.join(_output_dir(), name)
+    out_dir = os.path.join(directory, name)
+    # Safety: resolve and verify the path stays within the target directory
+    real_parent = os.path.realpath(directory)
+    real_out = os.path.realpath(out_dir)
+    if not real_out.startswith(real_parent + os.sep):
+        raise ValueError("Invalid template name: path traversal detected")
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "definition.json")
     with open(out_path, "w") as f:
@@ -102,8 +123,25 @@ def save_template(template: dict) -> str:
     return out_path
 
 
+def save_template(template: dict) -> str:
+    """Save a template to the output directory. Returns the file path."""
+    return _write_template_to_dir(template, _output_dir())
+
+
+def persist_template(template: dict) -> str:
+    """Save a template directly to the misp-objects repository (private mode only).
+
+    Creates or updates objects/<name>/definition.json in the submodule.
+    Raises RuntimeError if not in private mode.
+    """
+    if config.MODE != "private":
+        raise RuntimeError("Persist to repository is only available in private mode")
+    return _write_template_to_dir(template, _objects_dir())
+
+
 def delete_template(name: str) -> bool:
     """Delete a user-created template. Returns True if deleted, False if not found."""
+    _validate_safe_name(name)
     import shutil
     out_dir = os.path.join(_output_dir(), name)
     if os.path.isdir(out_dir):

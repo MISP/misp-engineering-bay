@@ -71,6 +71,18 @@ def test_create_template(client, sample_template):
     assert found[0]["source"] == "user"
 
 
+def test_create_template_rejects_existing_submodule_name(client, sample_template):
+    """Creating a template with the same name as a submodule template should fail."""
+    sample_template["name"] = "file"
+    res = client.post(
+        "/api/templates",
+        data=json.dumps(sample_template),
+        content_type="application/json",
+    )
+    assert res.status_code == 409
+    assert "already exists in the misp-objects repository" in res.get_json()["error"]
+
+
 def test_create_template_duplicate(client, sample_template):
     # Create once
     client.post(

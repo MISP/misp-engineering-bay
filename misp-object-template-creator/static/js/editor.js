@@ -21,6 +21,10 @@ const META_CATEGORIES = [
 let attributeCounter = 0;
 let isLoading = false;
 
+// Track whether we loaded an existing template (for version auto-increment)
+let originalVersion = null;  // version of the loaded template before editing
+let isEditingExisting = false;
+
 // ---- Initialisation ----
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -76,12 +80,24 @@ async function checkCloneParam() {
 
 function loadTemplateIntoEditor(tpl, isClone = false) {
     isLoading = true;
+
     document.getElementById('tpl-name').value = isClone ? '' : (tpl.name || '');
     document.getElementById('tpl-description').value = tpl.description || '';
     document.getElementById('tpl-meta-category').value = tpl['meta-category'] || '';
-    document.getElementById('tpl-version').value = tpl.version || 1;
+
     if (!isClone && tpl.uuid) {
         document.getElementById('tpl-uuid').value = tpl.uuid;
+    }
+
+    // Version auto-increment for edits (not clones — clones start at 1)
+    if (isClone) {
+        document.getElementById('tpl-version').value = 1;
+        originalVersion = null;
+        isEditingExisting = false;
+    } else {
+        originalVersion = tpl.version || 1;
+        isEditingExisting = true;
+        document.getElementById('tpl-version').value = autoIncrementVersion(originalVersion);
     }
 
     // Clear existing attributes
@@ -676,6 +692,80 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('#load-modal .modal-backdrop').addEventListener('click', closeLoadModal);
 });
 
+// ---- Version auto-increment ----
+
+/**
+ * Detect whether a version is date-based (YYYYMMDD or YYYYMMDDNN) or numeric,
+ * and return an appropriately incremented value.
+ *
+ * Date-based (>= 20000000): replace with today's date (YYYYMMDD). If the
+ * existing version already matches today's date, append or increment a
+ * two-digit suffix (e.g. 20260406 -> 2026040601 -> 2026040602).
+ *
+ * Numeric: increment by 1.
+ */
+function autoIncrementVersion(version) {
+    const v = parseInt(version, 10);
+    if (isNaN(v) || v < 1) return 1;
+
+    // Date-based threshold: >= 20000000 looks like YYYYMMDD
+    if (v >= 20000000) {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const todayStr = `${yyyy}${mm}${dd}`;
+        const todayNum = parseInt(todayStr, 10);
+
+        const vStr = String(v);
+        const vDatePart = vStr.substring(0, 8);
+
+        if (vDatePart === todayStr) {
+            // Already today — increment suffix
+            if (vStr.length <= 8) {
+                return parseInt(todayStr + '01', 10);
+            } else {
+                const suffix = parseInt(vStr.substring(8), 10) + 1;
+                return parseInt(todayStr + String(suffix).padStart(2, '0'), 10);
+            }
+        }
+        return todayNum;
+    }
+
+    // Numeric — simple increment
+    return v + 1;
+}
+
+// ---- Persist to repository (private mode) ----
+
+async function persistTemplate() {
+    markAllTouched();
+    const tpl = buildTemplateJson();
+    if (!tpl.name) {
+        showToast('Please enter a template name', 'error');
+        schedulePreviewUpdate();
+        return;
+    }
+
+    if (!confirm(`This will write "${tpl.name}" directly to the misp-objects repository. Continue?`)) {
+        return;
+    }
+
+    const res = await fetch('/api/templates/persist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tpl),
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+        showToast('Template persisted to repository');
+    } else {
+        showToast(data.errors ? `Validation failed: ${data.errors.length} error(s)` : (data.error || 'Persist failed'), 'error');
+        if (data.errors) updateValidationDisplay(data);
+    }
+}
+
 // ---- Reset ----
 
 function resetEditor() {
@@ -686,6 +776,8 @@ function resetEditor() {
     document.getElementById('tpl-version').value = '1';
     document.getElementById('attributes-container').innerHTML = '';
     attributeCounter = 0;
+    originalVersion = null;
+    isEditingExisting = false;
     updateRequirementsCheckboxes();
     regenerateUuid();
     schedulePreviewUpdate();

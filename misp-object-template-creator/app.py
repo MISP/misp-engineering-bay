@@ -16,7 +16,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def editor():
-    return render_template("editor.html")
+    return render_template("editor.html", mode=config.MODE)
 
 
 @app.route("/browse")
@@ -32,6 +32,12 @@ def docs():
 # ---------------------------------------------------------------------------
 # API — describe-types / meta info
 # ---------------------------------------------------------------------------
+
+@app.route("/api/config")
+def api_config():
+    """Expose non-sensitive configuration to the UI."""
+    return jsonify({"mode": config.MODE})
+
 
 @app.route("/api/describe-types")
 def api_describe_types():
@@ -98,8 +104,16 @@ def api_create_template():
         return jsonify(result.to_dict()), 422
 
     name = data["name"]
+    try:
+        template_store._validate_safe_name(name)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
     if template_store.template_exists_in_output(name):
         return jsonify({"error": f"Template '{name}' already exists. Use PUT to update."}), 409
+
+    if template_store.template_exists_in_submodule(name):
+        return jsonify({"error": f"Template '{name}' already exists in the misp-objects repository. Use 'Load Existing' to edit it instead."}), 409
 
     path = template_store.save_template(data)
     return jsonify({"message": "Template created", "path": path, **result.to_dict()}), 201
@@ -115,6 +129,11 @@ def api_update_template(name: str):
     if data.get("name") and data["name"] != name:
         return jsonify({"error": "Template name in body does not match URL"}), 400
     data["name"] = name
+
+    try:
+        template_store._validate_safe_name(name)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     result = validate_template(data)
     if not result.valid:
@@ -150,6 +169,34 @@ def api_validate_template():
             result.add_error("schema", err)
 
     return jsonify(result.to_dict())
+
+
+@app.route("/api/templates/persist", methods=["POST"])
+def api_persist_template():
+    """Persist a template directly to the misp-objects repository (private mode only)."""
+    if config.MODE != "private":
+        return jsonify({"error": "Persist to repository is only available in private mode"}), 403
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Request body must be valid JSON"}), 400
+
+    name = data.get("name", "")
+    try:
+        template_store._validate_safe_name(name)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    result = validate_template(data)
+    if not result.valid:
+        return jsonify(result.to_dict()), 422
+
+    try:
+        path = template_store.persist_template(data)
+    except (RuntimeError, ValueError) as e:
+        return jsonify({"error": str(e)}), 403
+
+    return jsonify({"message": "Template persisted to repository", "path": path, **result.to_dict()})
 
 
 @app.route("/api/uuid")

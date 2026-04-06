@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Editor — MISP Object Template Creator{% endblock %}
 {% block content %}
-<div class="editor-page">
+<div class="editor-page" data-mode="{{ mode }}" id="editor-page">
     <div class="editor-layout">
         <!-- Left: Form -->
         <div class="editor-form">
@@ -111,6 +111,9 @@
             <!-- Section 4: Actions -->
             <section class="form-section actions-section">
                 <button class="btn btn-primary btn-large" onclick="saveTemplate()">Save Template</button>
+                {% if mode == 'private' %}
+                <button class="btn btn-primary btn-large" style="background: var(--success); border-color: var(--success);" onclick="persistTemplate()">Persist to Repository</button>
+                {% endif %}
                 <button class="btn btn-secondary btn-large" onclick="exportJson()">Export JSON</button>
                 <button class="btn btn-secondary btn-large" onclick="copyJson()">Copy to Clipboard</button>
             </section>

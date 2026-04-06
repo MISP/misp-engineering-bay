@@ -18,9 +18,10 @@ META_CATEGORIES = [
     "followthemoney", "detection",
 ]
 
-# Recommended: lowercase alphanumeric with hyphens. But existing objects use
-# uppercase (ftm-Airplane), underscores (intelmq_event), spaces, etc.
-NAME_RECOMMENDED_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+# Template names: alphanumeric and hyphens only (case-insensitive).
+NAME_VALID_RE = re.compile(r"^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*$")
+# Preferred: all-lowercase
+NAME_LOWERCASE_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
 class ValidationResult:
@@ -58,8 +59,10 @@ def validate_template(template: dict, dt: DescribeTypes | None = None) -> Valida
     name = template.get("name")
     if not name or not isinstance(name, str):
         result.add_error("name", "Name is required and must be a non-empty string.")
-    elif not NAME_RECOMMENDED_RE.match(name):
-        result.add_warning("name", "Recommended format is lowercase alphanumeric with hyphens (e.g. 'my-object').")
+    elif not NAME_VALID_RE.match(name):
+        result.add_error("name", "Name must contain only alphanumeric characters and hyphens (e.g. 'my-object').")
+    elif not NAME_LOWERCASE_RE.match(name):
+        result.add_warning("name", "Recommended format is all-lowercase (e.g. 'my-object').")
 
     desc = template.get("description")
     if not desc or not isinstance(desc, str):
