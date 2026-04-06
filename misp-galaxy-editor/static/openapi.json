@@ -1,0 +1,188 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "MISP Galaxy Editor API",
+    "version": "1.0.0",
+    "description": "REST API for creating, editing, validating, and exporting MISP galaxy definitions and clusters."
+  },
+  "servers": [
+    { "url": "http://127.0.0.1:5051", "description": "Local development" }
+  ],
+  "paths": {
+    "/api/galaxies": {
+      "get": {
+        "summary": "List all galaxies",
+        "tags": ["Galaxies"],
+        "parameters": [
+          { "name": "name", "in": "query", "schema": { "type": "string" }, "description": "Filter by name (case-insensitive substring)" },
+          { "name": "namespace", "in": "query", "schema": { "type": "string" }, "description": "Filter by namespace (exact)" },
+          { "name": "has_kill_chain", "in": "query", "schema": { "type": "string" }, "description": "Filter to matrix galaxies (true/false)" }
+        ],
+        "responses": {
+          "200": { "description": "Array of galaxy summaries" }
+        }
+      },
+      "post": {
+        "summary": "Create a new galaxy",
+        "tags": ["Galaxies"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GalaxyBundle" } } }
+        },
+        "responses": {
+          "201": { "description": "Galaxy created" },
+          "400": { "description": "Invalid request" },
+          "409": { "description": "Galaxy already exists" },
+          "422": { "description": "Validation failed" }
+        }
+      }
+    },
+    "/api/galaxies/{type}": {
+      "get": {
+        "summary": "Get a galaxy bundle",
+        "tags": ["Galaxies"],
+        "parameters": [
+          { "name": "type", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Galaxy bundle" },
+          "404": { "description": "Not found" }
+        }
+      },
+      "put": {
+        "summary": "Update a galaxy",
+        "tags": ["Galaxies"],
+        "parameters": [
+          { "name": "type", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GalaxyBundle" } } }
+        },
+        "responses": {
+          "200": { "description": "Galaxy updated" },
+          "400": { "description": "Invalid request" },
+          "422": { "description": "Validation failed" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a user-created galaxy",
+        "tags": ["Galaxies"],
+        "parameters": [
+          { "name": "type", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Deleted" },
+          "403": { "description": "Cannot delete submodule galaxy" },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/api/galaxies/validate": {
+      "post": {
+        "summary": "Validate a galaxy bundle",
+        "tags": ["Validation"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GalaxyBundle" } } }
+        },
+        "responses": {
+          "200": { "description": "Validation result" }
+        }
+      }
+    },
+    "/api/galaxies/persist": {
+      "post": {
+        "summary": "Persist to misp-galaxy repo (private mode)",
+        "tags": ["Galaxies"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GalaxyBundle" } } }
+        },
+        "responses": {
+          "200": { "description": "Persisted" },
+          "403": { "description": "Not in private mode" },
+          "422": { "description": "Validation failed" }
+        }
+      }
+    },
+    "/api/meta-suggestions": {
+      "get": {
+        "summary": "Reference data for autocomplete",
+        "tags": ["Reference"],
+        "responses": {
+          "200": { "description": "Suggestions object" }
+        }
+      }
+    },
+    "/api/uuid": {
+      "get": {
+        "summary": "Generate a new UUIDv4",
+        "tags": ["Utility"],
+        "responses": {
+          "200": { "description": "UUID object" }
+        }
+      }
+    },
+    "/api/config": {
+      "get": {
+        "summary": "Get non-sensitive configuration",
+        "tags": ["Utility"],
+        "responses": {
+          "200": { "description": "Config object" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "GalaxyBundle": {
+        "type": "object",
+        "required": ["galaxy", "cluster"],
+        "properties": {
+          "galaxy": {
+            "type": "object",
+            "required": ["name", "description", "type", "uuid", "version"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "type": { "type": "string" },
+              "uuid": { "type": "string", "format": "uuid" },
+              "version": { "type": "integer", "minimum": 1 },
+              "icon": { "type": "string" },
+              "namespace": { "type": "string" },
+              "kill_chain_order": { "type": "object" }
+            }
+          },
+          "cluster": {
+            "type": "object",
+            "required": ["name", "description", "type", "uuid", "version", "authors", "source", "category", "values"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "type": { "type": "string" },
+              "uuid": { "type": "string", "format": "uuid" },
+              "version": { "type": "integer", "minimum": 1 },
+              "authors": { "type": "array", "items": { "type": "string" } },
+              "source": { "type": "string" },
+              "category": { "type": "string" },
+              "values": { "type": "array", "items": { "$ref": "#/components/schemas/ClusterValue" } }
+            }
+          }
+        }
+      },
+      "ClusterValue": {
+        "type": "object",
+        "required": ["value"],
+        "properties": {
+          "value": { "type": "string" },
+          "description": { "type": "string" },
+          "uuid": { "type": "string", "format": "uuid" },
+          "revoked": { "type": "boolean" },
+          "meta": { "type": "object" },
+          "related": { "type": "array" }
+        }
+      }
+    }
+  }
+}

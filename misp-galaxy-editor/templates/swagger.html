@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}API Docs — MISP Galaxy Editor{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/swagger-ui.css') }}">
+{% endblock %}
+
+{% block content %}
+<div id="swagger-ui"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/swagger-ui-bundle.js') }}"></script>
+<script>
+SwaggerUIBundle({
+    url: '{{ url_for("static", filename="openapi.json") }}',
+    dom_id: '#swagger-ui',
+    presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+    layout: 'BaseLayout',
+});
+</script>
+{% endblock %}

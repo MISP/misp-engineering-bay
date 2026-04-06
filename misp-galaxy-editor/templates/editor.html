@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}Editor — MISP Galaxy Editor{% endblock %}
+
+{% block content %}
+<div class="editor-page" data-mode="{{ mode }}">
+    <div class="editor-layout">
+        <!-- Left: Form -->
+        <div class="editor-form" id="editor-form">
+            <!-- Shared type field -->
+            <div class="form-section">
+                <h3 class="section-title">Galaxy Type</h3>
+                <p class="section-hint">The type field binds the galaxy definition to its cluster. It is also used as the filename.</p>
+                <div class="form-group">
+                    <label class="form-label">
+                        Type
+                        <span class="tooltip-trigger" data-tooltip="Unique identifier for this galaxy. Used as the filename and must match between galaxy and cluster. Only alphanumeric characters and hyphens allowed.">&#9432;</span>
+                    </label>
+                    <input type="text" class="form-input" id="galaxy-type" placeholder="e.g. threat-actor, my-custom-galaxy">
+                </div>
+            </div>
+
+            <!-- Galaxy Definition -->
+            <div class="form-section">
+                <h3 class="section-title">Galaxy Definition</h3>
+                <p class="section-hint">The galaxy definition and its cluster collection share the same metadata. Fields entered here populate both files.</p>
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label class="form-label">
+                            Name
+                            <span class="tooltip-trigger" data-tooltip="Human-readable name for this galaxy and its cluster collection.">&#9432;</span>
+                        </label>
+                        <input type="text" class="form-input" id="galaxy-name" placeholder="e.g. Threat Actor">
+                    </div>
+                    <div class="form-group flex-1">
+                        <label class="form-label">Namespace</label>
+                        <input type="text" class="form-input" id="galaxy-namespace" placeholder="e.g. misp" list="namespace-suggestions">
+                        <datalist id="namespace-suggestions"></datalist>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <textarea class="form-input form-textarea" id="galaxy-description" placeholder="Describe what this galaxy represents..."></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label class="form-label">Category</label>
+                        <input type="text" class="form-input" id="galaxy-category" placeholder="e.g. threat-actor" list="category-suggestions">
+                        <datalist id="category-suggestions"></datalist>
+                    </div>
+                    <div class="form-group flex-1">
+                        <label class="form-label">Source</label>
+                        <input type="text" class="form-input" id="galaxy-source" placeholder="e.g. MISP Project, Open Sources">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">
+                        Authors
+                        <span class="tooltip-trigger" data-tooltip="List of authors. Press Enter or comma to add.">&#9432;</span>
+                    </label>
+                    <div class="tag-input-wrapper" id="authors-wrapper" onclick="this.querySelector('input').focus()">
+                        <div class="tag-list" id="authors-tags"></div>
+                        <input type="text" class="tag-input" id="authors-input" placeholder="Add author...">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label class="form-label">UUID</label>
+                        <div class="input-group">
+                            <input type="text" class="form-input" id="galaxy-uuid" readonly>
+                            <button class="btn btn-small" onclick="regenerateUUID('galaxy-uuid')">Generate</button>
+                        </div>
+                    </div>
+                    <div class="form-group" style="width:120px">
+                        <label class="form-label">Version</label>
+                        <input type="number" class="form-input" id="galaxy-version" value="1" min="1">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label class="form-label">
+                            Icon
+                            <span class="tooltip-trigger" data-tooltip="FontAwesome icon name (without fa- prefix), e.g. 'user-secret', 'map', 'globe'.">&#9432;</span>
+                        </label>
+                        <input type="text" class="form-input" id="galaxy-icon" placeholder="e.g. map" list="icon-suggestions">
+                        <datalist id="icon-suggestions"></datalist>
+                    </div>
+                </div>
+
+                <!-- Kill chain toggle -->
+                <div class="form-group" style="margin-top:16px">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="kill-chain-toggle" onchange="toggleKillChain()">
+                        <span>Matrix galaxy (uses kill chains)</span>
+                        <span class="tooltip-trigger" data-tooltip="Enable this to define kill chain scopes and phases. This turns the galaxy into a matrix where clusters can be assigned to specific phases.">&#9432;</span>
+                    </label>
+                </div>
+                <div id="kill-chain-editor" style="display:none">
+                    <div class="section-hint">Define the ordered phases (columns) for the matrix. Add multiple scopes if you need separate tabs (e.g., per platform).</div>
+                    <div id="kill-chain-scopes"></div>
+                    <button class="btn btn-small btn-secondary" onclick="addKillChainScope()" style="margin-top:8px">+ Add Scope</button>
+                </div>
+            </div>
+
+            <!-- Clusters -->
+            <div class="form-section">
+                <div class="section-header">
+                    <h3 class="section-title">Clusters</h3>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <span class="meta-badge" id="values-count-badge">0 clusters</span>
+                        <button class="btn btn-small" id="matrix-view-btn" style="display:none" onclick="toggleMatrixView()">Matrix View</button>
+                    </div>
+                </div>
+                <div id="values-toolbar" style="display:flex;gap:8px;margin-bottom:12px">
+                    <input type="text" class="form-input" id="values-search" placeholder="Search clusters..." style="max-width:300px">
+                    <button class="btn btn-small btn-primary" onclick="addValue()">+ Add Cluster</button>
+                    <button class="btn btn-small" onclick="bulkGenerateUUIDs()">Generate Missing UUIDs</button>
+                </div>
+                <div id="values-list"></div>
+                <div id="values-pagination" class="pagination"></div>
+                <div id="matrix-container" style="display:none"></div>
+            </div>
+
+            <!-- Actions -->
+            <div class="form-section actions-section">
+                <button class="btn btn-primary btn-large" onclick="exportJson()">Export Zip</button>
+                <button class="btn btn-large btn-persist" onclick="persistGalaxy()"
+                        style="background:var(--success);border-color:var(--success);color:#fff;{% if mode != 'private' %}display:none{% endif %}">
+                    Persist to Repository
+                </button>
+                <button class="btn btn-large" onclick="copyJson()">Copy JSON</button>
+                <button class="btn btn-secondary btn-large" onclick="openLoadExisting()">Load Existing</button>
+            </div>
+        </div>
+
+        <!-- Right: Preview -->
+        <div class="editor-preview">
+            <div class="preview-header">
+                <div style="display:flex;gap:8px;align-items:center">
+                    <h2>Preview</h2>
+                    <div style="display:flex;gap:4px">
+                        <button class="btn btn-small preview-tab active" data-tab="galaxy" onclick="switchPreviewTab('galaxy')">Galaxy</button>
+                        <button class="btn btn-small preview-tab" data-tab="cluster" onclick="switchPreviewTab('cluster')">Cluster Collection</button>
+                    </div>
+                </div>
+                <div class="validation-badge" id="validation-badge"></div>
+            </div>
+            <div class="validation-errors" id="validation-errors" style="display:none"></div>
+            <pre class="json-preview" id="json-preview"></pre>
+        </div>
+    </div>
+</div>
+
+<!-- Load existing modal -->
+<div class="modal" id="load-modal" hidden>
+    <div class="modal-backdrop" onclick="closeLoadModal()"></div>
+    <div class="modal-content" style="max-width:800px;max-height:85vh">
+        <div class="modal-header">
+            <h2>Load Existing Galaxy</h2>
+            <button class="btn btn-icon" onclick="closeLoadModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
+                <input type="text" class="form-input" id="load-search" placeholder="Search galaxies..."
+                       style="flex:1" oninput="filterLoadList()">
+                <label class="toggle-label">
+                    <input type="radio" name="load-mode" value="edit" checked>
+                    <span>Edit</span>
+                </label>
+                <label class="toggle-label">
+                    <input type="radio" name="load-mode" value="clone">
+                    <span>Clone</span>
+                </label>
+            </div>
+            <div class="load-templates-list" id="load-list">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/jszip.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/meta-editor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/related-editor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/values-editor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/matrix-editor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/preview.js') }}"></script>
+<script src="{{ url_for('static', filename='js/editor.js') }}"></script>
+{% endblock %}

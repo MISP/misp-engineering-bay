@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Browse Galaxies — MISP Galaxy Editor{% endblock %}
+
+{% block content %}
+<div class="browser-page">
+    <div class="page-header">
+        <div>
+            <h1>Browse Galaxies</h1>
+            <p class="subtitle">Explore all existing MISP galaxy definitions</p>
+        </div>
+    </div>
+
+    <div class="browser-controls">
+        <input type="text" class="form-input search-input" id="search-input"
+               placeholder="Search by name, type, or description...">
+        <select class="form-select" id="namespace-filter" style="max-width:200px">
+            <option value="">All namespaces</option>
+        </select>
+        <label class="toggle-label">
+            <input type="checkbox" id="kill-chain-filter">
+            <span>Matrix only</span>
+        </label>
+        <span class="result-count" id="result-count"></span>
+    </div>
+
+    <div class="templates-grid" id="galaxies-grid">
+        <div class="loading">Loading galaxies...</div>
+    </div>
+</div>
+
+<!-- JSON preview modal -->
+<div class="modal" id="json-modal" hidden>
+    <div class="modal-backdrop" onclick="closeJsonModal()"></div>
+    <div class="modal-content" style="max-width:900px">
+        <div class="modal-header">
+            <h2 id="json-modal-title">Galaxy JSON</h2>
+            <button class="btn btn-icon" onclick="closeJsonModal()">&times;</button>
+        </div>
+        <div style="display:flex;gap:8px;padding:8px 20px 0">
+            <button class="btn btn-small json-tab active" data-tab="galaxy" onclick="switchJsonTab('galaxy')">Galaxy</button>
+            <button class="btn btn-small json-tab" data-tab="cluster" onclick="switchJsonTab('cluster')">Cluster</button>
+        </div>
+        <pre class="json-preview" id="json-modal-body"></pre>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeJsonModal()">Close</button>
+            <a class="btn btn-primary" id="json-modal-edit" href="/">Load in Editor</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+<script>
+let allGalaxies = [];
+let currentModalBundle = null;
+
+async function init() {
+    try {
+        const [galaxies, suggestions] = await Promise.all([
+            fetch('/api/galaxies').then(r => r.json()),
+            fetch('/api/meta-suggestions').then(r => r.json()),
+        ]);
+        allGalaxies = galaxies;
+
+        // Populate namespace filter
+        const sel = document.getElementById('namespace-filter');
+        for (const ns of suggestions.namespaces) {
+            const opt = document.createElement('option');
+            opt.value = ns;
+            opt.textContent = ns;
+            sel.appendChild(opt);
+        }
+
+        renderGalaxies(allGalaxies);
+    } catch (e) {
+        document.getElementById('galaxies-grid').innerHTML =
+            '<div class="empty-state">Failed to load galaxies.</div>';
+    }
+}
+
+function filterGalaxies() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    const ns = document.getElementById('namespace-filter').value;
+    const kcOnly = document.getElementById('kill-chain-filter').checked;
+
+    let filtered = allGalaxies;
+    if (q) {
+        filtered = filtered.filter(g =>
+            g.galaxy_name.toLowerCase().includes(q) ||
+            g.cluster_name.toLowerCase().includes(q) ||
+            g.type.toLowerCase().includes(q) ||
+            g.description.toLowerCase().includes(q)
+        );
+    }
+    if (ns) filtered = filtered.filter(g => g.namespace === ns);
+    if (kcOnly) filtered = filtered.filter(g => g.has_kill_chain);
+
+    renderGalaxies(filtered);
+}
+
+function renderGalaxies(galaxies) {
+    const grid = document.getElementById('galaxies-grid');
+    document.getElementById('result-count').textContent = `${galaxies.length} galaxies`;
+
+    if (!galaxies.length) {
+        grid.innerHTML = '<div class="empty-state">No galaxies match your search.</div>';
+        return;
+    }
+
+    grid.innerHTML = galaxies.map(g => `
+        <div class="template-card">
+            <div class="template-card-header">
+                <span class="template-name">${escapeHtml(g.galaxy_name || g.type)}</span>
+                <span class="badge ${g.source === 'user' ? 'badge-user' : 'badge-submodule'}">${g.source}</span>
+            </div>
+            <div class="template-desc">${escapeHtml(g.description)}</div>
+            <div class="template-meta">
+                <span class="meta-badge">${escapeHtml(g.type)}</span>
+                ${g.namespace ? `<span class="meta-badge">${escapeHtml(g.namespace)}</span>` : ''}
+                <span class="meta-info">${g.value_count} clusters</span>
+                ${g.has_kill_chain ? '<span class="meta-badge" style="color:var(--warning)">matrix</span>' : ''}
+            </div>
+            <div class="template-actions">
+                <button class="btn btn-small btn-secondary" onclick="viewJson('${escapeHtml(g.type)}')">View JSON</button>
+                <a class="btn btn-small btn-primary" href="/?load=${encodeURIComponent(g.type)}">Edit</a>
+                <a class="btn btn-small" href="/?clone=${encodeURIComponent(g.type)}">Clone</a>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function viewJson(type) {
+    try {
+        const bundle = await fetch(`/api/galaxies/${encodeURIComponent(type)}`).then(r => r.json());
+        currentModalBundle = bundle;
+        document.getElementById('json-modal-title').textContent = bundle.galaxy.name || type;
+        document.getElementById('json-modal-edit').href = `/?load=${encodeURIComponent(type)}`;
+        switchJsonTab('galaxy');
+        document.getElementById('json-modal').hidden = false;
+    } catch (e) {
+        showToast('Failed to load galaxy', 'error');
+    }
+}
+
+function switchJsonTab(tab) {
+    if (!currentModalBundle) return;
+    document.querySelectorAll('.json-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    const data = tab === 'galaxy' ? currentModalBundle.galaxy : currentModalBundle.cluster;
+    document.getElementById('json-modal-body').textContent =
+        JSON.stringify(data, null, 2);
+}
+
+function closeJsonModal() {
+    document.getElementById('json-modal').hidden = true;
+    currentModalBundle = null;
+}
+
+document.getElementById('search-input').addEventListener('input', filterGalaxies);
+document.getElementById('namespace-filter').addEventListener('change', filterGalaxies);
+document.getElementById('kill-chain-filter').addEventListener('change', filterGalaxies);
+
+init();
+</script>
+{% endblock %}

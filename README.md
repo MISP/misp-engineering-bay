@@ -23,12 +23,32 @@ Key features:
 
 See the [Object Template Creator README](misp-object-template-creator/README.md) for installation and usage instructions.
 
+### Galaxy Editor
+
+**Path:** [`misp-galaxy-editor/`](misp-galaxy-editor/)
+
+A Python/Flask web application and REST API for creating, editing, validating, and exporting MISP galaxy definitions and their associated clusters. Supports both simple galaxies and matrix-style kill chain galaxies (like ATT&CK) with a drag-and-drop matrix editor.
+
+Key features:
+- Unified editor for galaxy definitions and clusters in a single interface
+- Matrix editor with drag-and-drop for kill chain galaxies (multiple scopes/tabs)
+- Cluster values editor with search, pagination, freeform meta fields, and relationships
+- Browse, load, and modify any of the 112+ existing MISP galaxies
+- Full REST API with bundle-based galaxy+cluster management
+- Interactive API documentation via Swagger UI
+- Light and dark themes
+
+See the [Galaxy Editor README](misp-galaxy-editor/README.md) for installation and usage instructions.
+
 ## Repository Structure
 
 ```
 misp-engineering-bay/
 ├── misp-object-template-creator/   # Object template authoring tool
+├── misp-galaxy-editor/             # Galaxy definition and cluster editor
 ├── misp-objects/                   # MISP objects library (git submodule)
+├── misp-galaxy/                    # MISP galaxy library (git submodule)
+├── update-vendor-libs.sh           # Update bundled JS/CSS libraries
 ├── PRD.md                          # Product requirements for the template creator
 ├── requirements.md                 # Implementation milestones and progress tracking
 └── LICENSE                         # AGPL-3.0
@@ -44,6 +64,40 @@ cd misp-engineering-bay
 ```
 
 Then follow the setup instructions for the specific tool you want to use.
+
+## Maintainer Notes
+
+### Updating Vendored Libraries
+
+All third-party JavaScript and CSS libraries (Swagger UI, JSZip) are vendored locally under each tool's `static/vendor/` directory — no external CDN links are used at runtime. Before each release, run the update script to fetch the latest versions:
+
+```bash
+./update-vendor-libs.sh
+```
+
+This will:
+- Resolve the latest version of each library from the npm registry
+- Download the files into the correct `static/vendor/` directories for each tool
+- Print the versions fetched so you can verify
+
+Review the changes with `git diff --stat` and commit the updated files with the release.
+
+### Updating Submodules
+
+The `misp-objects` and `misp-galaxy` submodules should be updated periodically to pick up new templates and galaxies from the upstream repositories:
+
+```bash
+git submodule update --remote
+```
+
+### Updating describeTypes.json
+
+The Object Template Creator bundles a snapshot of MISP's canonical type definitions. To update it:
+
+```bash
+curl -o misp-object-template-creator/data/describeTypes.json \
+  https://raw.githubusercontent.com/MISP/MISP/refs/heads/2.5/describeTypes.json
+```
 
 ## Contributing
 
