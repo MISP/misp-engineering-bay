@@ -6,7 +6,8 @@ function escapeHtml(str) {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function showToast(message, type = 'success') {
@@ -45,7 +46,15 @@ function setupTagInput(wrapperId, inputId, tagsId, onChange) {
         const tag = document.createElement('span');
         tag.className = 'tag-item';
         tag.dataset.value = value;
-        tag.innerHTML = `${escapeHtml(value)}<span class="tag-remove" onclick="this.parentElement.remove();${onChange ? onChange + '()' : ''}">&times;</span>`;
+        tag.textContent = value;
+        const removeBtn = document.createElement('span');
+        removeBtn.className = 'tag-remove';
+        removeBtn.textContent = '\u00d7';
+        removeBtn.addEventListener('click', () => {
+            tag.remove();
+            if (onChange) window[onChange]();
+        });
+        tag.appendChild(removeBtn);
         tagsContainer.appendChild(tag);
         if (onChange) window[onChange]();
     }
