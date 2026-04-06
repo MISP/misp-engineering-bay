@@ -96,6 +96,7 @@ function renderMatrix() {
         html += `<button class="matrix-tab${scope === matrixCurrentScope ? ' active' : ''}" onclick="switchMatrixScope('${escapeHtml(scope)}')">${escapeHtml(scope)}</button>`;
     }
     html += '</div>';
+    html += '<div class="section-hint" style="margin-bottom:12px">Drag clusters into columns to assign them to kill chain phases. <strong>Ctrl+drag</strong> to assign a cluster to multiple phases without removing it from its current position.</div>';
 
     // Render grid
     const colCount = phases.length;
@@ -123,7 +124,7 @@ function renderMatrix() {
     // Unplaced panel
     html += `<div class="matrix-unplaced">
         <div class="matrix-unplaced-header">
-            <span>Unplaced Values</span>
+            <span>Unplaced Clusters</span>
             <span class="meta-badge">${unplaced.length}</span>
         </div>
         <div class="matrix-unplaced-list" ondragover="matrixDragOver(event)" ondragleave="matrixDragLeave(event)">`;
