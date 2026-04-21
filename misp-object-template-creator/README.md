@@ -64,18 +64,32 @@ cp config.json.default config.json
 
 `run.sh` is fine for development but runs Flask's dev server in the foreground — closing your terminal (or an SSH session) kills the process. For anything longer-lived, install it as a **systemd user service** backed by gunicorn.
 
-**Prerequisite — enable linger for the service account:**
+> **Important:** do not run the installation below as your personal account. Create a dedicated service user first (Step 1), switch to it (Step 2), and run the clone + install as that user (Step 3).
+
+**Step 1 — Create the service user (one-time, from any account with sudo):**
 
 ```bash
-sudo loginctl enable-linger "$USER"
+sudo useradd --create-home --shell /bin/bash misp-engineering-bay
+sudo loginctl enable-linger misp-engineering-bay
 ```
 
-Without linger, the systemd user manager is torn down when you log out and `systemctl --user` will fail with `Failed to connect to bus: No medium found` if you SSH in without a logind session. After enabling it, log out and back in once so the user manager spins up.
+`enable-linger` keeps that account's systemd user manager running regardless of whether anyone is logged in. Without it `systemctl --user` fails with `Failed to connect to bus: No medium found` and the service would stop the moment the install shell exits.
 
-**Install and start:**
+**Step 2 — Become the service user** with a proper user session (so `XDG_RUNTIME_DIR` is set and the user bus is reachable). Pick whichever works on your host:
+
+| Method | Command |
+|--------|---------|
+| SSH directly (recommended) | copy your public key into `/home/misp-engineering-bay/.ssh/authorized_keys`, then `ssh misp-engineering-bay@<host>` |
+| `machinectl` | `sudo machinectl shell misp-engineering-bay@` |
+| `sudo` fallback | `sudo -iu misp-engineering-bay env XDG_RUNTIME_DIR=/run/user/$(id -u misp-engineering-bay) bash -l` |
+
+Verify before continuing: `systemctl --user show-environment` should print output, not an error.
+
+**Step 3 — Clone and install as the service user:**
 
 ```bash
-cd misp-object-template-creator
+git clone --recurse-submodules <repo-url>
+cd misp-engineering-bay/misp-object-template-creator
 ./install-service.sh
 ```
 
@@ -91,7 +105,7 @@ The service binds to `127.0.0.1:5050` by default (2 workers). Override via env v
 HOST=0.0.0.0 PORT=5050 WORKERS=4 ./install-service.sh
 ```
 
-Manage the service with standard systemd commands:
+**Manage the service** (still as the `misp-engineering-bay` user):
 
 ```bash
 systemctl --user status  misp-object-template-creator
