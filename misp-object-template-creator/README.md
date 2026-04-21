@@ -46,6 +46,42 @@ python3 -m venv venv
 ./venv/bin/python app.py
 ```
 
+### Running as a Service (recommended)
+
+`run.sh` is fine for development but runs Flask's dev server in the foreground — closing your terminal (or an SSH session) kills the process. For anything longer-lived, install it as a **systemd user service** backed by gunicorn:
+
+```bash
+cd misp-object-template-creator
+./install-service.sh
+```
+
+This will:
+- Create the venv and install dependencies (including `gunicorn`) if needed
+- Render `systemd/misp-object-template-creator.service.template` with the current install path
+- Drop it into `~/.config/systemd/user/misp-object-template-creator.service`
+- `daemon-reload`, `enable`, and `start` the service
+
+The service binds to `127.0.0.1:5050` by default (2 workers). Override via env vars at install time:
+
+```bash
+HOST=0.0.0.0 PORT=5050 WORKERS=4 ./install-service.sh
+```
+
+Manage the service with standard systemd commands:
+
+```bash
+systemctl --user status  misp-object-template-creator
+systemctl --user restart misp-object-template-creator
+systemctl --user stop    misp-object-template-creator
+journalctl   --user -u   misp-object-template-creator -f
+```
+
+To have the service keep running after you log out (otherwise systemd tears down your user manager on logout), run once:
+
+```bash
+sudo loginctl enable-linger "$USER"
+```
+
 ## Configuration
 
 All settings can be overridden via environment variables:
@@ -141,6 +177,8 @@ misp-object-template-creator/
 ├── validator.py           # Template validation engine
 ├── template_store.py      # Template file I/O
 ├── run.sh                 # Quick-start script (creates venv, runs app)
+├── install-service.sh     # Install as a systemd user service (gunicorn)
+├── systemd/               # Service unit template
 ├── requirements.txt       # Python dependencies
 ├── data/
 │   └── describeTypes.json # Bundled MISP type definitions (update via CI)

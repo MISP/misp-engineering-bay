@@ -3,7 +3,7 @@
   "info": {
     "title": "MISP Galaxy Editor API",
     "version": "1.0.0",
-    "description": "REST API for creating, editing, validating, and exporting MISP galaxy definitions and clusters."
+    "description": "REST API for browsing, validating, and persisting MISP galaxy definitions and cluster collections. In public mode only read and validate endpoints are available. In private mode the persist endpoint allows writing directly to the misp-galaxy repository."
   },
   "servers": [
     { "url": "http://127.0.0.1:5051", "description": "Local development" }
@@ -12,95 +12,108 @@
     "/api/galaxies": {
       "get": {
         "summary": "List all galaxies",
+        "description": "Returns summary information for all galaxies from the misp-galaxy submodule. Supports filtering by name, namespace, and kill chain presence.",
         "tags": ["Galaxies"],
         "parameters": [
-          { "name": "name", "in": "query", "schema": { "type": "string" }, "description": "Filter by name (case-insensitive substring)" },
-          { "name": "namespace", "in": "query", "schema": { "type": "string" }, "description": "Filter by namespace (exact)" },
-          { "name": "has_kill_chain", "in": "query", "schema": { "type": "string" }, "description": "Filter to matrix galaxies (true/false)" }
+          { "name": "name", "in": "query", "schema": { "type": "string" }, "description": "Filter by name or type (case-insensitive substring match)" },
+          { "name": "namespace", "in": "query", "schema": { "type": "string" }, "description": "Filter by namespace (exact match)" },
+          { "name": "has_kill_chain", "in": "query", "schema": { "type": "string" }, "description": "Filter to matrix galaxies only (true/false)" }
         ],
         "responses": {
-          "200": { "description": "Array of galaxy summaries" }
-        }
-      },
-      "post": {
-        "summary": "Create a new galaxy",
-        "tags": ["Galaxies"],
-        "requestBody": {
-          "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GalaxyBundle" } } }
-        },
-        "responses": {
-          "201": { "description": "Galaxy created" },
-          "400": { "description": "Invalid request" },
-          "409": { "description": "Galaxy already exists" },
-          "422": { "description": "Validation failed" }
+          "200": {
+            "description": "Array of galaxy summaries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/GalaxySummary" }
+                }
+              }
+            }
+          }
         }
       }
     },
     "/api/galaxies/{type}": {
       "get": {
         "summary": "Get a galaxy bundle",
+        "description": "Returns the full galaxy definition and cluster collection for a given type. Resolves type-to-filename mismatches automatically.",
         "tags": ["Galaxies"],
         "parameters": [
-          { "name": "type", "in": "path", "required": true, "schema": { "type": "string" } }
+          { "name": "type", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Galaxy type identifier" }
         ],
         "responses": {
-          "200": { "description": "Galaxy bundle" },
-          "404": { "description": "Not found" }
-        }
-      },
-      "put": {
-        "summary": "Update a galaxy",
-        "tags": ["Galaxies"],
-        "parameters": [
-          { "name": "type", "in": "path", "required": true, "schema": { "type": "string" } }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GalaxyBundle" } } }
-        },
-        "responses": {
-          "200": { "description": "Galaxy updated" },
-          "400": { "description": "Invalid request" },
-          "422": { "description": "Validation failed" }
-        }
-      },
-      "delete": {
-        "summary": "Delete a user-created galaxy",
-        "tags": ["Galaxies"],
-        "parameters": [
-          { "name": "type", "in": "path", "required": true, "schema": { "type": "string" } }
-        ],
-        "responses": {
-          "200": { "description": "Deleted" },
-          "403": { "description": "Cannot delete submodule galaxy" },
-          "404": { "description": "Not found" }
+          "200": {
+            "description": "Galaxy bundle (galaxy definition + cluster collection)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GalaxyBundle" }
+              }
+            }
+          },
+          "404": { "description": "Galaxy not found" }
         }
       }
     },
     "/api/galaxies/validate": {
       "post": {
         "summary": "Validate a galaxy bundle",
+        "description": "Validates a galaxy bundle against both custom rules and the official JSON schemas. Returns structured errors and warnings without persisting anything.",
         "tags": ["Validation"],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GalaxyBundle" } } }
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/GalaxyBundle" }
+            }
+          }
         },
         "responses": {
-          "200": { "description": "Validation result" }
+          "200": {
+            "description": "Validation result",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ValidationResult" }
+              }
+            }
+          },
+          "400": { "description": "Request body must be valid JSON" }
         }
       }
     },
     "/api/galaxies/persist": {
       "post": {
-        "summary": "Persist to misp-galaxy repo (private mode)",
+        "summary": "Persist to misp-galaxy repository",
+        "description": "Writes the galaxy definition and cluster collection files directly to the misp-galaxy submodule. Only available in private mode. Validates the bundle before writing.",
         "tags": ["Galaxies"],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GalaxyBundle" } } }
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/GalaxyBundle" }
+            }
+          }
         },
         "responses": {
-          "200": { "description": "Persisted" },
+          "200": {
+            "description": "Galaxy persisted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" },
+                    "galaxy_path": { "type": "string" },
+                    "cluster_path": { "type": "string" },
+                    "valid": { "type": "boolean" },
+                    "errors": { "type": "array", "items": { "$ref": "#/components/schemas/ValidationEntry" } },
+                    "warnings": { "type": "array", "items": { "$ref": "#/components/schemas/ValidationEntry" } }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid request or unsafe type name" },
           "403": { "description": "Not in private mode" },
           "422": { "description": "Validation failed" }
         }
@@ -109,9 +122,17 @@
     "/api/meta-suggestions": {
       "get": {
         "summary": "Reference data for autocomplete",
+        "description": "Returns known namespaces, icons, categories, meta keys (with frequency and typical type), and relationship types extracted from existing galaxies and clusters.",
         "tags": ["Reference"],
         "responses": {
-          "200": { "description": "Suggestions object" }
+          "200": {
+            "description": "Suggestions object",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MetaSuggestions" }
+              }
+            }
+          }
         }
       }
     },
@@ -120,16 +141,41 @@
         "summary": "Generate a new UUIDv4",
         "tags": ["Utility"],
         "responses": {
-          "200": { "description": "UUID object" }
+          "200": {
+            "description": "Generated UUID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uuid": { "type": "string", "format": "uuid" }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
     "/api/config": {
       "get": {
         "summary": "Get non-sensitive configuration",
+        "description": "Returns the current operating mode (public or private).",
         "tags": ["Utility"],
         "responses": {
-          "200": { "description": "Config object" }
+          "200": {
+            "description": "Config object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": { "type": "string", "enum": ["public", "private"] }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -144,43 +190,115 @@
             "type": "object",
             "required": ["name", "description", "type", "uuid", "version"],
             "properties": {
-              "name": { "type": "string" },
-              "description": { "type": "string" },
-              "type": { "type": "string" },
+              "name": { "type": "string", "description": "Human-readable galaxy name" },
+              "description": { "type": "string", "description": "Galaxy description" },
+              "type": { "type": "string", "description": "Type identifier (used as filename, must match between galaxy and cluster)" },
               "uuid": { "type": "string", "format": "uuid" },
               "version": { "type": "integer", "minimum": 1 },
-              "icon": { "type": "string" },
-              "namespace": { "type": "string" },
-              "kill_chain_order": { "type": "object" }
+              "icon": { "type": "string", "description": "FontAwesome icon name" },
+              "namespace": { "type": "string", "description": "Organizational namespace (e.g. misp, mitre-attack)" },
+              "kill_chain_order": { "type": "object", "description": "For matrix galaxies: object mapping scope names to ordered arrays of phase names" }
             }
           },
           "cluster": {
             "type": "object",
             "required": ["name", "description", "type", "uuid", "version", "authors", "source", "category", "values"],
             "properties": {
-              "name": { "type": "string" },
-              "description": { "type": "string" },
-              "type": { "type": "string" },
+              "name": { "type": "string", "description": "Cluster collection name (typically mirrors galaxy name)" },
+              "description": { "type": "string", "description": "Cluster collection description (typically mirrors galaxy description)" },
+              "type": { "type": "string", "description": "Must match galaxy type" },
               "uuid": { "type": "string", "format": "uuid" },
               "version": { "type": "integer", "minimum": 1 },
               "authors": { "type": "array", "items": { "type": "string" } },
-              "source": { "type": "string" },
-              "category": { "type": "string" },
-              "values": { "type": "array", "items": { "$ref": "#/components/schemas/ClusterValue" } }
+              "source": { "type": "string", "description": "Data source (e.g. MISP Project, Open Sources)" },
+              "category": { "type": "string", "description": "Cluster category (e.g. threat-actor, tool)" },
+              "values": { "type": "array", "items": { "$ref": "#/components/schemas/ClusterEntry" } }
             }
           }
         }
       },
-      "ClusterValue": {
+      "ClusterEntry": {
         "type": "object",
         "required": ["value"],
         "properties": {
-          "value": { "type": "string" },
+          "value": { "type": "string", "description": "Cluster name / identifier" },
           "description": { "type": "string" },
           "uuid": { "type": "string", "format": "uuid" },
-          "revoked": { "type": "boolean" },
-          "meta": { "type": "object" },
-          "related": { "type": "array" }
+          "revoked": { "type": "boolean", "description": "Whether this cluster entry is deprecated" },
+          "meta": { "type": "object", "description": "Freeform metadata (refs, synonyms, kill_chain, country, etc.)" },
+          "related": {
+            "type": "array",
+            "description": "Relationships to other clusters",
+            "items": {
+              "type": "object",
+              "required": ["dest-uuid", "type"],
+              "properties": {
+                "dest-uuid": { "type": "string", "format": "uuid", "description": "Target cluster UUID" },
+                "type": { "type": "string", "description": "Relationship type (e.g. similar, uses, mitigates)" },
+                "tags": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        }
+      },
+      "GalaxySummary": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "galaxy_name": { "type": "string" },
+          "cluster_name": { "type": "string" },
+          "description": { "type": "string" },
+          "namespace": { "type": "string" },
+          "icon": { "type": "string" },
+          "value_count": { "type": "integer" },
+          "has_kill_chain": { "type": "boolean" },
+          "version": { "type": "integer" },
+          "source": { "type": "string", "enum": ["misp-galaxy", "user"] }
+        }
+      },
+      "ValidationResult": {
+        "type": "object",
+        "properties": {
+          "valid": { "type": "boolean" },
+          "errors": { "type": "array", "items": { "$ref": "#/components/schemas/ValidationEntry" } },
+          "warnings": { "type": "array", "items": { "$ref": "#/components/schemas/ValidationEntry" } }
+        }
+      },
+      "ValidationEntry": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Dot-notation path to the field (e.g. galaxy.name, cluster.values[0].value)" },
+          "message": { "type": "string" },
+          "severity": { "type": "string", "enum": ["error", "warning"] }
+        }
+      },
+      "MetaSuggestions": {
+        "type": "object",
+        "properties": {
+          "namespaces": { "type": "array", "items": { "type": "string" } },
+          "icons": { "type": "array", "items": { "type": "string" } },
+          "categories": { "type": "array", "items": { "type": "string" } },
+          "meta_keys": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": { "type": "string" },
+                "frequency": { "type": "integer" },
+                "typical_type": { "type": "string", "enum": ["string", "array"] }
+              }
+            }
+          },
+          "relationship_types": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string" },
+                "frequency": { "type": "integer" }
+              }
+            }
+          }
         }
       }
     }

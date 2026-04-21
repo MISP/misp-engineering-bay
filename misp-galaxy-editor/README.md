@@ -51,6 +51,42 @@ python3 -m venv venv
 ./venv/bin/python app.py
 ```
 
+### Running as a Service (recommended)
+
+`run.sh` is fine for development but runs Flask's dev server in the foreground — closing your terminal (or an SSH session) kills the process. For anything longer-lived, install it as a **systemd user service** backed by gunicorn:
+
+```bash
+cd misp-galaxy-editor
+./install-service.sh
+```
+
+This will:
+- Create the venv and install dependencies (including `gunicorn`) if needed
+- Render `systemd/misp-galaxy-editor.service.template` with the current install path
+- Drop it into `~/.config/systemd/user/misp-galaxy-editor.service`
+- `daemon-reload`, `enable`, and `start` the service
+
+The service binds to `127.0.0.1:5051` by default (2 workers). Override via env vars at install time:
+
+```bash
+HOST=0.0.0.0 PORT=5051 WORKERS=4 ./install-service.sh
+```
+
+Manage the service with standard systemd commands:
+
+```bash
+systemctl --user status  misp-galaxy-editor
+systemctl --user restart misp-galaxy-editor
+systemctl --user stop    misp-galaxy-editor
+journalctl   --user -u   misp-galaxy-editor -f
+```
+
+To have the service keep running after you log out (otherwise systemd tears down your user manager on logout), run once:
+
+```bash
+sudo loginctl enable-linger "$USER"
+```
+
 ## Configuration
 
 Copy the default configuration file and edit as needed:
@@ -180,6 +216,8 @@ misp-galaxy-editor/
 ├── galaxy_meta.py         # Reference data (meta keys, namespaces, icons, etc.)
 ├── validator.py           # Bundle validation engine
 ├── run.sh                 # Quick-start script (creates venv, runs app)
+├── install-service.sh     # Install as a systemd user service (gunicorn)
+├── systemd/               # Service unit template
 ├── requirements.txt       # Python dependencies
 ├── static/
 │   ├── css/style.css      # Application styles (light + dark themes)
