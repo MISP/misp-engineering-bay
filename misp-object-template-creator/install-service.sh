@@ -58,6 +58,35 @@ sed \
 
 echo "Wrote $UNIT_PATH"
 
+# systemctl --user needs a running user manager (user@UID.service). If we're in
+# an SSH session without a logind session, or on an account where linger was
+# never enabled, the user bus won't exist and we'd fail with a cryptic
+# "Failed to connect to bus: No medium found". Detect that up front and give
+# the user something actionable.
+if ! systemctl --user show-environment >/dev/null 2>&1; then
+    cat >&2 <<EOF
+
+The unit file was written, but systemctl --user can't reach your user
+instance (no user bus available). This usually means one of:
+
+  * You're running as a user that doesn't have a login session (e.g. via
+    sudo -u / su), so XDG_RUNTIME_DIR and the user bus aren't set up.
+  * The account has no 'linger' enabled and systemd-logind didn't create
+    a session for this SSH login.
+
+To fix it, as a user with sudo:
+
+  sudo loginctl enable-linger "$USER"
+
+Then log out of the SSH session and back in, and run:
+
+  systemctl --user daemon-reload
+  systemctl --user enable --now ${SERVICE_NAME}.service
+
+EOF
+    exit 1
+fi
+
 systemctl --user daemon-reload
 systemctl --user enable "${SERVICE_NAME}.service"
 systemctl --user restart "${SERVICE_NAME}.service"

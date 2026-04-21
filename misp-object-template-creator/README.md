@@ -21,26 +21,40 @@ A web application and REST API for creating, editing, validating, and exporting 
 ## Quick Start
 
 ```bash
-# Clone the repo (with submodules)
+# Clone the repo with submodules (required — schema files live in misp-objects/)
 git clone --recurse-submodules <repo-url>
 cd misp-engineering-bay/misp-object-template-creator
 
-# Run (creates venv, installs deps, starts server)
+# If you cloned without --recurse-submodules, fetch them now:
+# git submodule update --init --recursive
+
+# run.sh creates the venv, installs deps, copies config.json.default →
+# config.json if missing, and starts the dev server in the foreground.
 ./run.sh
 ```
 
 The app starts at **http://127.0.0.1:5050**.
 
+`run.sh` is for interactive/dev use — it runs Flask's dev server and dies when your shell exits. For a persistent deployment see [Running as a Service](#running-as-a-service-recommended) below.
+
 ### Manual Setup
 
+If you prefer to do each step yourself instead of using `run.sh`:
+
 ```bash
+# From the repo root, make sure submodules are present
+git submodule update --init --recursive
+
 cd misp-object-template-creator
 
-# Create virtual environment
+# Create virtual environment and install dependencies
 python3 -m venv venv
-
-# Install dependencies
 ./venv/bin/pip install -r requirements.txt
+
+# Create your local config from the defaults (optional — config.py falls back
+# to config.json.default if config.json is missing, but copying it lets you
+# customise settings without touching a tracked file)
+cp config.json.default config.json
 
 # Start the server
 ./venv/bin/python app.py
@@ -48,7 +62,17 @@ python3 -m venv venv
 
 ### Running as a Service (recommended)
 
-`run.sh` is fine for development but runs Flask's dev server in the foreground — closing your terminal (or an SSH session) kills the process. For anything longer-lived, install it as a **systemd user service** backed by gunicorn:
+`run.sh` is fine for development but runs Flask's dev server in the foreground — closing your terminal (or an SSH session) kills the process. For anything longer-lived, install it as a **systemd user service** backed by gunicorn.
+
+**Prerequisite — enable linger for the service account:**
+
+```bash
+sudo loginctl enable-linger "$USER"
+```
+
+Without linger, the systemd user manager is torn down when you log out and `systemctl --user` will fail with `Failed to connect to bus: No medium found` if you SSH in without a logind session. After enabling it, log out and back in once so the user manager spins up.
+
+**Install and start:**
 
 ```bash
 cd misp-object-template-creator
@@ -74,12 +98,6 @@ systemctl --user status  misp-object-template-creator
 systemctl --user restart misp-object-template-creator
 systemctl --user stop    misp-object-template-creator
 journalctl   --user -u   misp-object-template-creator -f
-```
-
-To have the service keep running after you log out (otherwise systemd tears down your user manager on logout), run once:
-
-```bash
-sudo loginctl enable-linger "$USER"
 ```
 
 ## Configuration
